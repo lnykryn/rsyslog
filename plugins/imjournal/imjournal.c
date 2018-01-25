@@ -424,7 +424,7 @@ persistJournalState(void)
 	char *cursor;
 	int ret = 0;
 
-	/* On success, sd_journal_get_cursor()  returns 1 in systemd
+	/* On success, sd_journal_get_cursor() returns 1 in systemd
 	   197 or older and 0 in systemd 198 or newer */
 	if ((ret = sd_journal_get_cursor(j, &cursor)) >= 0) {
                /* we create a temporary name by adding a ".tmp"
@@ -503,17 +503,10 @@ pollJournal(void)
 	jr = sd_journal_process(j);
 
 	if (pr == 1 && jr == SD_JOURNAL_INVALIDATE) {
-		/* do not persist stateFile sd_journal_get_cursor will fail! */
-		char* tmp = cs.stateFile;
-		cs.stateFile = NULL;
-		closeJournal();
-		cs.stateFile = tmp;
-
+		if ((r = sd_journal_get_cursor(j, &tmp_cursor)) < 0) { /* handle err */ }
+		sd_journal_close(j);
 		CHKiRet(openJournal());
-
-		if(cs.stateFile != NULL){
-			iRet = loadJournalState(); // TODO: CHECK
-		}
+		if (sd_journal_seek_cursor(j, tmp_cursor) != 0) { /* handle err by tailing ... */ }
 		LogMsg(0, RS_RET_OK, LOG_NOTICE, "imjournal: journal reloaded...");
 	} else if (jr < 0) {
 		err = jr;
@@ -566,7 +559,6 @@ loadJournalState(void)
 		free (cs.stateFile);
 		cs.stateFile = new_stateFile;
 	}
-
 
 	if ((r_sf = fopen(cs.stateFile, "rb")) != NULL) {
 		char readCursor[128 + 1];
@@ -666,7 +658,6 @@ CODESTARTrunInput
 		LogError(0, RS_RET_DEPRECATED,
 			"\"usepidfromsystem\" is depricated, use \"usepid\" instead");
 	}
-
 
 	if (cs.usePid && (strcmp(cs.usePid, "system") == 0)) {
 		pidFieldName = "_PID";
